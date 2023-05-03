@@ -21,6 +21,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
+
     // Réception des chaînes de caractères
     recv_strings = recv_argv(fd);
     printf("Received strings:\n");
