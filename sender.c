@@ -12,7 +12,7 @@
 
 int main() {
     char *strings[] = {"Hello", "world", "!", NULL};
-    char *strings2 = "This is a test !";
+    char *strings2 = "+10az 5 echo bonjour";
     int fd;
 
     // Création du tube nommé
@@ -28,10 +28,10 @@ int main() {
     // Envoi des chaînes de caractères
     send_argv(fd, strings);
 
-
+/**
     // Envoi des chaînes de caractères
     send_string(fd, strings2);
-
+**/
     // Fermeture du tube nommé
     close(fd);
 

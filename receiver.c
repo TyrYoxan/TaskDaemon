@@ -22,7 +22,7 @@ int main() {
     }
 
 
-    // Réception des chaînes de caractères
+  // Réception des chaînes de caractères
     recv_strings = recv_argv(fd);
     printf("Received strings:\n");
     for (int i = 0; recv_strings[i] != NULL; i++) {
@@ -31,14 +31,14 @@ int main() {
     }
     printf("\n");
     free(recv_strings);
-
+/**
     // Réception des chaînes de caractères
     strings = recv_string(fd);
     printf("Received strings:\n");
 
     printf("%s\n", strings);
     free(strings);
-
+**/
     // Fermeture du tube nommé
     close(fd);
 

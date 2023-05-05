@@ -90,7 +90,7 @@ int send_argv(int fd, char *argv[]) {
         ++i;
     }
     size = i;
-
+    printf("Taille : %d", i);
     // Envoi de la taille du tableau
     if (write(fd, &size, sizeof(int)) == -1) {
         perror("Erreur lors de l'envoi de la taille du tableau");
