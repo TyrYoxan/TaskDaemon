@@ -19,16 +19,18 @@ int send_string(int fd, char *str){
     size_t len = strlen(str);
 
     // Envoie de la longueur de la chaîne en premier
+    printf("%s \n",str);
     ssize_t n = write(fd, &len, sizeof(len));
-    if (n != sizeof(len)) {
+
+    if (n == -1) {
         perror("Error: don't sending string length");
         exit(1);
     }
 
     // Envoie de la chaîne de caractères
     n = write(fd, str, len);
-    if (n != len) {
-        perror("Error: error sending string data");
+    if (n == -1) {
+        perror("Error: sending string data");
         exit(1);
     }
 
@@ -51,7 +53,8 @@ char *recv_string(int fd){
 
     // Lecture de la longueur de la chaîne
     size_t length = 0;
-    ssize_t sz = read(fd, &length, sizeof(size_t));
+    ssize_t sz =0;
+    sz = read(fd, &length, sizeof(size_t));
     if(sz < 0){
         perror("Error: read");
         exit(1);
@@ -65,7 +68,7 @@ char *recv_string(int fd){
     }
 
     // Lecture de la chaîne de caractère
-    sz = read(fd, str, length);
+    sz = read(fd, str, sizeof(char));
     if(sz < 0){
         perror("Error: read");
         exit(1);
@@ -85,12 +88,15 @@ int send_argv(int fd, char *argv[]) {
     int i = 0;
     int size = 0;
 
-    // Calcul de la taille du tableau
+    // Calcul de la taille du tableau/
+
     while (argv[i] != NULL) {
         ++i;
     }
     size = i;
-    printf("Taille : %d", i);
+    printf("Taille : %d\n", i);
+    fflush(stdout);
+
     // Envoi de la taille du tableau
     if (write(fd, &size, sizeof(int)) == -1) {
         perror("Erreur lors de l'envoi de la taille du tableau");
@@ -118,6 +124,7 @@ int send_argv(int fd, char *argv[]) {
 }
 
 char **recv_argv(int fd) {
+
     // Vérifie si le descripteur de fichier est valide
     if (fd < 0) {
         perror("Error: invalid file descriptor");
@@ -125,11 +132,12 @@ char **recv_argv(int fd) {
     }
 
     int len;
-    ssize_t n = read(fd, &len, sizeof(int)); // On lit la taille du tableau
+    int n = read(fd, &len, sizeof(int)); // On lit la taille du tableau
     if (n < 0) {
         perror("Error: read");
         exit(1);
     }
+    printf("len : %c", len);
 
     char **argv = calloc(len + 1 , sizeof(char *)); // On alloue de la mémoire pour le tableau
     if (argv == NULL) {

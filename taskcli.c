@@ -1,90 +1,95 @@
 //
 // Created by clement on 05/05/23.
 //
-#include <bits/types/FILE.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <signal.h>
 #include <string.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/types.h>
 #include "message.h"
 
-//
-// Created by clement on 01/05/23.
-//
-int main(int argc, char *argv[]) {
-    if(argc != 1 && argc < 4){
-        perror("Usage : ./taskcli START PERIOD CMD [ARG]...\n"
-               "Usage : ./taskcli\n");
-        exit(1);
-    }
+void affUsage(char *nomProgram) {
+    fprintf(stderr, "Usage : %s START PERIOD CMD [ARG]...\n", nomProgram);
+    fprintf(stderr, "Usage : %s\n", nomProgram);
 
-    // Ouvrir le fichier
-    FILE* fichier = fopen("/tmp/taskd.pid", "r");
-    if (fichier == NULL) {
-        printf("Impossible d'ouvrir le fichier.\n");
-        return 1;
-    }
+}
 
-    // Lire le contenu du fichier ligne par ligne
-    int pid;
-    fscanf(fichier,"%d",&pid);
+pid_t check_taskd_running() {
+    FILE *pid_file;
+    pid_t taskd_pid;
+    const char *pid_file_path = "/tmp/taskd.pid";
 
-
-    // Fermer le fichier
-    fclose(fichier);
-
-/**
-    // Allouer un tableau dynamique de chaînes de caractères
-    char **args = malloc(argc * sizeof(char*));
-    if (args == NULL) {
-        // Gérer l'erreur d'allocation mémoire
-        perror("Error: malloc");
-        exit(1);
-    }
-
-    // Allouer dynamiquement chaque chaîne de caractères et les copier dans le tableau
-    for (int i = 0; i < argc; i++) {
-        char *arg = malloc(strlen(argv[i]) + 1);
-        if (arg == NULL) {
-            // Gérer l'erreur d'allocation mémoire
-            perror("Error: malloc2");
-            exit(1);
+    pid_file = fopen(pid_file_path, "r");
+    if (pid_file == NULL) {
+        if (errno == ENOENT) {
+            perror("Aucun processus taskd détecté.");
+        } else {
+            perror("Erreur lors de l'ouverture du fichier taskd.pid");
         }
-        strcpy(arg, argv[i]);
-        args[i] = arg;
-    }
-    args[argc] = NULL;**/
-
-    // Faire quelque chose avec les arguments
-    // Ouverture du tube nommé en écriture
-    int fd;
-    fd = open("/tmp/tasks.fifo", O_WRONLY);
-    if (fd == -1) {
-        perror("open");
-        exit(EXIT_FAILURE);
-    }
-    char *strings[] = {"Hello", "world", "!", NULL};
-    // Envoi des chaînes de caractères
-    for(int i = 0; i < argc; i++) {
-        printf("%s ", strings[i]);
-    }
-    printf("\n");
-    send_argv(fd, strings);
-
-    // Libérer la mémoire allouée
-    for (int i = 0; i < argc; i++) {
-        free(strings[i]);
+        exit(1);
     }
 
-    free(strings);
+    if (fscanf(pid_file, "%d", &taskd_pid) != 1) {
+        perror("Erreur lors de la lecture du PID du processus taskd.");
+        fclose(pid_file);
+        exit(1);
+    }
 
-    kill(pid, SIGUSR1);
+    fclose(pid_file);
+    return taskd_pid;
+}
 
-    // Fermeture du tube nommé
-    close(fd);
+int main(int argc, char *argv[]) {
+    if (argc < 4) {
+        affUsage(argv[0]);
+        exit(1);
+    }
+
+    // Conversion des arguments START et PERIOD en entiers longs
+    char *endptr;
+    long start = strtol(argv[1], &endptr, 10);
+    if (*endptr != '\0') {
+        fprintf(stderr, "Invalid start : %s\n", argv[1]);
+        affUsage(argv[0]);
+        exit(1);
+    }
+    long period = strtol(argv[2], &endptr, 10);
+    if (*endptr != '\0') {
+        fprintf(stderr, "Invalid period : %s\n", argv[2]);
+        affUsage(argv[0]);
+        exit(1);
+    }
+
+    char *cmd = argv[3];
+
+
+    pid_t taskd_pid = check_taskd_running();
+    if (taskd_pid == -1) {
+        perror("Aucun processus taskd en cours d'exécution.");
+        exit(1);
+    }
+
+    int fifo_fd = open("/tmp/tasks.fifo", O_WRONLY);
+    if (fifo_fd == -1) {
+        perror("Erreur lors de l'ouverture du tube nommé");
+        exit(1);
+    }
+
+    send_argv(fifo_fd, argv);
+
+
+    kill(taskd_pid,SIGUSR1);
+    printf("taskd : %d",taskd_pid);
+    int ret = close(fifo_fd);
+    if (ret == -1) {
+        perror("close");
+        exit(1);
+    }
 
     return 0;
 }

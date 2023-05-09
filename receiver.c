@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include "message.h"
 
 #define MAX_STRING_LENGTH 1024
@@ -14,14 +15,23 @@ int main() {
     char *strings;
     int fd;
 
+    // Création du tube nommé
+    mkfifo("myfifo", 0664);
+
     // Ouverture du tube nommé en lecture
     fd = open("myfifo", O_RDONLY);
     if (fd == -1) {
         perror("open");
         exit(EXIT_FAILURE);
     }
+/**
+    // Réception des chaînes de caractères
+    strings = recv_string(fd);
+    printf("Received strings:\n");
 
-
+    printf("%s\n", strings);
+    free(strings);
+   **/
   // Réception des chaînes de caractères
     recv_strings = recv_argv(fd);
     printf("Received strings:\n");
@@ -31,14 +41,7 @@ int main() {
     }
     printf("\n");
     free(recv_strings);
-/**
-    // Réception des chaînes de caractères
-    strings = recv_string(fd);
-    printf("Received strings:\n");
 
-    printf("%s\n", strings);
-    free(strings);
-**/
     // Fermeture du tube nommé
     close(fd);
 

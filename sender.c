@@ -11,12 +11,11 @@
 #define MAX_STRING_LENGTH 1024
 
 int main() {
-    char *strings[] = {"Hello", "world", "!", NULL};
+    char *strings[] = {"Hello\0", "world\0", "!\0", NULL};
     char *strings2 = "+10az 5 echo bonjour";
     int fd;
 
-    // Création du tube nommé
-    mkfifo("myfifo", 0644);
+
 
     // Ouverture du tube nommé en écriture
     fd = open("myfifo", O_WRONLY);
@@ -24,14 +23,16 @@ int main() {
         perror("open");
         exit(EXIT_FAILURE);
     }
-
-    // Envoi des chaînes de caractères
-    send_argv(fd, strings);
-
 /**
     // Envoi des chaînes de caractères
     send_string(fd, strings2);
+
 **/
+    // Envoi des chaînes de caractères
+    send_argv(fd, strings);
+
+
+
     // Fermeture du tube nommé
     close(fd);
 

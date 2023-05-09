@@ -6,6 +6,7 @@
 #include <dirent.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <string.h>
 #include "message.h"
 
 #define MAX_STRING_LENGTH 1024
@@ -15,6 +16,7 @@
 typedef struct {
     char* cmd;          // Commande à exécuter (chaîne de caractères)
     int period;         // Période de la commande (en secondes)
+    int start;           // Début de la commande
     int argc;           // Nombre d'arguments de la commande
     char** argv;        // Tableau d'arguments de la commande
 }Commande;
@@ -82,10 +84,42 @@ void supprimer_liste(Liste* l) {
     l->size = 0;
 }
 
+/*************  Méthode    *************/
+
+char* concat_args(char* argv[], int argc) {
+    // Calculer la taille de la chaîne résultante
+    int size = 0;
+    for (int i = 1; i < argc; i++) {
+        size += strlen(argv[i]) + 1; // +1 pour l'espace entre les arguments
+    }
+
+    // Allouer la mémoire pour la chaîne résultante
+    char* result = (char*) malloc((size + 1) * sizeof(char));
+    if (result == NULL) {
+        perror("Erreur lors de l'allocation de mémoire");
+        exit(1);
+    }
+
+    // Concaténer les arguments à la chaîne résultante
+    strcpy(result, "");
+    for (int i = 1; i < argc; i++) {
+        strcat(result, argv[i]);
+        strcat(result, ";");
+    }
+
+    // Ajouter le caractère de fin de chaîne
+    result[size] = '\0';
+
+    return result;
+}
+
+
 /*************  Handler    *************/
+volatile int sigusr1_received = 0;
 
 void handle_sigusr1(int sig){
     printf("SIGUSR1 \n");
+    sigusr1_received =1;
 }
 /*************  Main    *************/
 
@@ -115,13 +149,13 @@ int main() {
     // Vérifie si le tube existe
     if(access("/tmp/tasks.fifo", F_OK) == -1){
         // Création du tube nommé
-        if(mkfifo("/tmp/tasks.fifo", 0644) == -1){
+        if(mkfifo("/tmp/tasks.fifo", 0664) == -1){
             perror("Error: mkfifo");
             exit(1);
         }
     }
 
-    // Création ou tronquage de tesk.txt
+    // Création ou tronquage de task.txt
     FILE* f = fopen("/tmp/tasks.txt", "w");
     if (f == NULL) {
         printf("Error: fopen");
@@ -142,23 +176,39 @@ int main() {
     /** Reception d'un signal **/
     // enregistrement de la fonction de traitement pour SIGUSR1
     signal(SIGUSR1, handle_sigusr1);
+
     char **recv_strings;
     int fd = open("/tmp/tasks.fifo", O_RDONLY);
-    if (fp == -1) {
+    if (fd == -1) {
         perror("open");
         exit(1);
     }
 
     // Réception des chaînes de caractères
     recv_strings = recv_argv(fd);
-    printf("Received strings:\n");
+    int size = 0;
     for (int i = 0; recv_strings[i] != NULL; i++) {
         printf("%s ", recv_strings[i]);
+        size++;
+    }
+    printf("\n");
+
+    char *result = concat_args(recv_strings, size);
+
+    f = fopen("/tmp/task.txt", "w");
+    fprintf(f,result);
+    fclose(f);
+
+
+    for (int i = 0; recv_strings[i] != NULL; i++) {
         free(recv_strings[i]);
     }
+
+    free(result);
     free(recv_strings);
 
     close(fd);
+
     // Suppression du tube
     unlink("/tmp/tasks.fifo");
 
