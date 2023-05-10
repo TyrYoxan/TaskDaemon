@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,6 +9,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include "message.h"
+#include <signal.h>
 
 #define MAX_STRING_LENGTH 1024
 
@@ -121,6 +123,7 @@ void handle_sigusr1(int sig){
     printf("SIGUSR1 \n");
     sigusr1_received =1;
 }
+
 /*************  Main    *************/
 
 int main() {
@@ -175,39 +178,52 @@ int main() {
 
     /** Reception d'un signal **/
     // enregistrement de la fonction de traitement pour SIGUSR1
-    signal(SIGUSR1, handle_sigusr1);
+ 
+    struct sigaction action;
+    sigemptyset(&action.sa_mask);
+    action.sa_handler = handle_sigusr1;
+    action.sa_flags = 0;
+    sigaction(SIGUSR1, &action, NULL);
 
-    char **recv_strings;
-    int fd = open("/tmp/tasks.fifo", O_RDONLY);
-    if (fd == -1) {
-        perror("open");
-        exit(1);
+    while(1){
+       
+        if(sigusr1_received){
+            char **recv_strings;
+            int fd = open("/tmp/tasks.fifo", O_RDONLY);
+            if (fd == -1) {
+                perror("open");
+                exit(1);
+            }
+
+            // Réception des chaînes de caractères
+            recv_strings = recv_argv(fd);
+            int size = 0;
+            for (int i = 0; recv_strings[i] != NULL; i++) {
+                printf("%s ", recv_strings[i]);
+                size++;
+            }
+            printf("\n");
+
+            char *result = concat_args(recv_strings, size);
+
+            f = fopen("/tmp/tasks.txt", "w");
+            fprintf(f,result);
+            fclose(f);
+
+
+            for (int i = 0; recv_strings[i] != NULL; i++) {
+                free(recv_strings[i]);
+            }
+
+            free(result);
+            free(recv_strings);
+
+            close(fd);
+
+            sigusr1_received = 0;
+        }
     }
-
-    // Réception des chaînes de caractères
-    recv_strings = recv_argv(fd);
-    int size = 0;
-    for (int i = 0; recv_strings[i] != NULL; i++) {
-        printf("%s ", recv_strings[i]);
-        size++;
-    }
-    printf("\n");
-
-    char *result = concat_args(recv_strings, size);
-
-    f = fopen("/tmp/task.txt", "w");
-    fprintf(f,result);
-    fclose(f);
-
-
-    for (int i = 0; recv_strings[i] != NULL; i++) {
-        free(recv_strings[i]);
-    }
-
-    free(result);
-    free(recv_strings);
-
-    close(fd);
+    
 
     // Suppression du tube
     unlink("/tmp/tasks.fifo");

@@ -1,6 +1,3 @@
-//
-// Created by clement on 05/05/23.
-//
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,9 +79,10 @@ int main(int argc, char *argv[]) {
 
     send_argv(fifo_fd, argv);
 
+    printf("GG");
 
     kill(taskd_pid,SIGUSR1);
-    printf("taskd : %d",taskd_pid);
+    printf("taskd : %d \n",taskd_pid);
     int ret = close(fifo_fd);
     if (ret == -1) {
         perror("close");
