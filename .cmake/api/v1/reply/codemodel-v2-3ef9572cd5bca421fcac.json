@@ -1,0 +1,96 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "TaskDaemon",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "message::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-message-Debug-1e13b1ac03230f20208d.json",
+					"name" : "message",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "receiver::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-receiver-Debug-9db42fc715a91a1258e9.json",
+					"name" : "receiver",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "sender::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-sender-Debug-c687605078958f38cc82.json",
+					"name" : "sender",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "taskcli::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-taskcli-Debug-81359db0214af533ed18.json",
+					"name" : "taskcli",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "taskd::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-taskd-Debug-01278a1ebc350b1229da.json",
+					"name" : "taskd",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/clement/Documents/TaskDaemon",
+		"source" : "/home/clement/Documents/TaskDaemon"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}
