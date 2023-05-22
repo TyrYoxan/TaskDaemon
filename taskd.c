@@ -1,5 +1,5 @@
 #define _DEFAULT_SOURCE
-#define _XOPEN_SOURCE 
+#define _XOPEN_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <string.h>
 #include "message.h"
-#include <signal.h>
 #include <time.h>
 #include <locale.h>
 
@@ -59,15 +58,10 @@ void add_cmd(Liste *l, Commande cmd) {
         l->capacity = new_capacity;
     }
 
-    // Créer une copie de la commande et l'ajouter à la liste
-    Commande *cmd_copy = malloc(sizeof(Commande));
-    if (!cmd_copy) {
-        perror("Erreur lors de l'allocation de mémoire");
-        exit(1);
-    }
-    *cmd_copy = cmd;
-    l->commande[l->size] = cmd_copy;
+
+    l->commande[l->size] = &cmd;
     l->size++;
+
 }
 
 // Supprimer une commande
@@ -87,34 +81,36 @@ void supp_cmd(Liste* l, int index){
 // Récupération d'une commande de la liste
 Commande* get_commande(Liste* l, int index) {
     if(index >= 0 && index < l->size) {
-        return &(l->commande[index]);
+        return (l->commande[index]);
     }
     return NULL;
 }
 
 // Supprimer liste
 void supprimer_liste(Liste* l) {
-    // Libération de la mémoire occupée par chaque commande
-    for (int i = 0; i < l->size; i++) {
-        Commande* cmd = &(l->commande[i]);
-        for (int j = 0; j < cmd->argc; j++) {
-            free(cmd->argv[j]);
-        }
-        free(cmd->argv);
+    if (l == NULL) {
+        return; // Vérifier si la liste est nulle
     }
 
-    // Libération de la mémoire occupée par la liste
-    free(l->commande);
-    l->size = 0;
+    if (l->commande != NULL) {
+        // Libération de la mémoire occupée par chaque commande
+        for (int i = 0; i < l->size; i++) {
+            supp_cmd(l,i);
+        }
+        free(l->commande);
+    }
+
+    free(l); // Libération de la mémoire occupée par la structure Liste
 }
 
+// Afficher la liste des commandes
 void print_liste(Liste *l) {
     printf("Liste des commandes : \n");
     for(int i=0; i<l->size; i++){
         printf("Commande %d:\n", i+1);
         printf("Numéro : %d\n", l->commande[i]->num);
         printf("Période : %d\n", l->commande[i]->period);
-        printf("Début : %s\n", l->commande[i]->start);
+        printf("Début : %d\n", l->commande[i]->start);
         printf("Nombre d'arguments : %d\n", l->commande[i]->argc);
         printf("Arguments : ");
         for (int j = 0; j < l->commande[i]->argc; j++) {
@@ -139,7 +135,7 @@ time_t getTime(){
 
 char* when(int start){
     time_t inputTime = getTime() + start;
-
+    printf("getTime : %ld\n",getTime());
     struct tm *timeInfo;
     char *buffer = malloc(80 * sizeof(char));
 
@@ -151,9 +147,7 @@ char* when(int start){
         exit(1);
     }
 
-    strftime(buffer, 80, "%e %B %C %H:%M:%S", timeInfo);
-
-
+    strftime(buffer, 80, "%e %B  %H:%M:%S", timeInfo);
 
     return buffer;
 }
@@ -183,8 +177,8 @@ char* concat_args(char* argv[], int argc, Commande* cmd) {
         perror("Erreur lors de l'allocation de mémoire");
         exit(1);
     }
-    printf("Start : %d\n",cmd->start);
-    snprintf(str, max_len, "%d;%s;%d; ", cmd->num, when(cmd->start), cmd->period);
+
+    snprintf(str, max_len, "%d;%s;%d; ", cmd->num, when(atoi(argv[1])), cmd->period);
     for (int i = 0; i < cmd->argc; i++) {
         if (cmd->argv[i] != NULL && strlen(cmd->argv[i]) > 0) {
             size_t current_len = strlen(str);
@@ -203,33 +197,9 @@ char* concat_args(char* argv[], int argc, Commande* cmd) {
     str[max_len - 1] = '\0';
 
     ++command_counter;
+
+    //free(argvs);
     return str;
-}
-
-time_t convertDateToSeconds(const char* date) {
-    struct tm timeInfo;
-    memset(&timeInfo, 0, sizeof(struct tm));
-
-    // Configuration du format d'entrée
-    const char* format = "%e %B %C %T"; 
-
-    printf("Date : %s\n", date);
-    // Analyse de la date donnée
-    if (strptime(date,format, &timeInfo) == NULL) {
-        fprintf(stderr, "Erreur lors de l'analyse de la date\n");
-        exit(1);
-    }
-
-    printf("Jour : %d %d %d\n",timeInfo.tm_mday,timeInfo.tm_mon,timeInfo.tm_year);
-    printf("Time : %d:%d:%d\n",timeInfo.tm_hour,timeInfo.tm_min,timeInfo.tm_sec);
-    // Conversion en nombre de secondes
-    time_t seconds = mktime(&timeInfo);
-    if (seconds == -1) {
-        perror("Erreur lors de la conversion en secondes");
-        exit(1);
-    }
-
-    return seconds;
 }
 
 time_t getNextTime(const Commande* cmd) {
@@ -239,14 +209,11 @@ time_t getNextTime(const Commande* cmd) {
 
     // Convertir la date en secondes depuis Epoch
     time_t dateInSeconds = cmd->start;
-    
-   
 
     return dateInSeconds - time(NULL);
 }
 
 int getnextTime(Liste *l, int nbCommande){
-    time_t currentTime = getTime();
     time_t minDuree = 3600;
     // Parcourir la liste des commandes
     for (int i = 0; i < nbCommande; i++) {
@@ -265,6 +232,7 @@ int getnextTime(Liste *l, int nbCommande){
 
 volatile int sigusr1_received = 0;
 volatile int alarm_received = 0;
+volatile int suppression_received = 0;
 
 void handler_sigusr1(int sig){
     printf("SIGUSR1 \n");
@@ -274,6 +242,10 @@ void handler_sigusr1(int sig){
 void handler_alarm(int sig){
     printf("ALARM !!! \n");
     alarm_received =1;
+}
+
+void handler_supression(int sig){
+    suppression_received = 1;
 }
 
 /*************  Main    *************/
@@ -333,6 +305,7 @@ int main() {
  
     struct sigaction action;
     struct sigaction action2;
+    struct sigaction action3;
 
     // Configurer le gestionnaire pour SIGUSR1
     action.sa_handler = handler_sigusr1;
@@ -345,6 +318,14 @@ int main() {
     sigemptyset(&action2.sa_mask);
     action2.sa_flags = 0;
     sigaction(SIGALRM, &action2, NULL);
+
+    // Configurer le gestionnaire pour SIGALRM
+    action3.sa_handler = handler_supression;
+    sigemptyset(&action3.sa_mask);
+    action3.sa_flags = 0;
+    sigaction(SIGQUIT, &action3, NULL);
+    sigaction(SIGINT, &action3, NULL);
+    sigaction(SIGTERM, &action3, NULL);
 
     int fd = open("/tmp/tasks.fifo", O_RDONLY);
     if (fd == -1) {
@@ -360,7 +341,7 @@ int main() {
         int stop = getnextTime(liste,liste->size);
         //printf("Time : %d\n",getnextTime(liste,liste->size));
         alarm(stop);
-        
+
         if(sigusr1_received){
             char **recv_strings;
 
@@ -399,17 +380,27 @@ int main() {
         if(alarm_received){
 
         }
+
+        if(suppression_received){
+            supprimer_liste(liste);
+
+            close(fd);
+            // Suppression du tube
+            unlink("/tmp/tasks.fifo");
+
+            // Suppression de tasd.pid
+            if(remove("/tmp/taskd.pid") == -1){
+                perror("Error: remove taskd.pid");
+                exit(1);
+            }
+
+            // Suppression de tasd.pid
+            if(remove("/tmp/tasks.txt") == -1){
+                perror("Error: remove taskd.txt");
+                exit(1);
+            }
+
+            return 1;
+        }
     }
-
-    close(fd);
-    // Suppression du tube
-    unlink("/tmp/tasks.fifo");
-
-    // Suppression de tasd.pid
-    if(remove("/tmp/taskd.pid") == -1){
-        perror("Error: remove taskd.pid");
-        exit(1);
-    }
-
-    return 0;
 }
