@@ -70,7 +70,6 @@ void add_cmd(Liste *l, Commande cmd) {
     l->size++;
 }
 
-
 // Supprimer une commande
 void supp_cmd(Liste* l, int index){
     if(index >= 0 && index < l->size){
@@ -126,6 +125,7 @@ void print_liste(Liste *l) {
 }
 
 /*************  Méthode    *************/
+
 time_t getTime(){
     time_t currentTime = time(NULL);
 
@@ -239,36 +239,41 @@ time_t getNextTime(const Commande* cmd) {
 
     // Convertir la date en secondes depuis Epoch
     time_t dateInSeconds = cmd->start;
-    printf("Time Start : %ld\n", dateInSeconds);
-    printf("Time Now   : %ld\n", time(NULL));
-    pause();
+    
+   
 
     return dateInSeconds - time(NULL);
 }
 
 int getnextTime(Liste *l, int nbCommande){
     time_t currentTime = getTime();
-    time_t minDuration = (time_t)(-1); // Durée minimale à attendre initialement définie à la plus grande valeur possible
-
+    time_t minDuree = 3600;
     // Parcourir la liste des commandes
     for (int i = 0; i < nbCommande; i++) {
-        time_t duration = getNextTime(l->commande[i]);
-
-        // Vérifier si la durée est inférieure à la durée minimale actuelle
-        if (duration >= 0 && duration < minDuration) {
-            minDuration = duration;
+        time_t duree = getNextTime(l->commande[i]);
+        
+        if(minDuree > duree){
+            minDuree = duree;
         }
+        
     }
-
-    return minDuration;
+   
+    return minDuree;
 }
 
 /*************  Handler    *************/
-volatile int sigusr1_received = 0;
 
-void handle_sigusr1(int sig){
+volatile int sigusr1_received = 0;
+volatile int alarm_received = 0;
+
+void handler_sigusr1(int sig){
     printf("SIGUSR1 \n");
     sigusr1_received =1;
+}
+
+void handler_alarm(int sig){
+    printf("ALARM !!! \n");
+    alarm_received =1;
 }
 
 /*************  Main    *************/
@@ -327,10 +332,19 @@ int main() {
     // enregistrement de la fonction de traitement pour SIGUSR1
  
     struct sigaction action;
+    struct sigaction action2;
+
+    // Configurer le gestionnaire pour SIGUSR1
+    action.sa_handler = handler_sigusr1;
     sigemptyset(&action.sa_mask);
-    action.sa_handler = handle_sigusr1;
     action.sa_flags = 0;
     sigaction(SIGUSR1, &action, NULL);
+
+    // Configurer le gestionnaire pour SIGALRM
+    action2.sa_handler = handler_alarm;
+    sigemptyset(&action2.sa_mask);
+    action2.sa_flags = 0;
+    sigaction(SIGALRM, &action2, NULL);
 
     int fd = open("/tmp/tasks.fifo", O_RDONLY);
     if (fd == -1) {
@@ -343,10 +357,10 @@ int main() {
 
 
     while(1){
-        if(liste->commande != NULL){
-            printf("Time alarm : %ld \n", getNextTime(liste->commande[0]));
-        }
-
+        int stop = getnextTime(liste,liste->size);
+        //printf("Time : %d\n",getnextTime(liste,liste->size));
+        alarm(stop);
+        
         if(sigusr1_received){
             char **recv_strings;
 
@@ -382,7 +396,9 @@ int main() {
             sigusr1_received = 0;
         }
 
+        if(alarm_received){
 
+        }
     }
 
     close(fd);
