@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE
+#define _XOPEN_SOURCE 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -20,7 +21,7 @@
 typedef struct {
     int num;            // Numéro de la commande
     int period;         // Période de la commande (en secondes)
-    char* start;          // Début de la commande
+    int start;          // Début de la commande
     int argc;           // Nombre d'arguments de la commande
     char** argv;        // Tableau d'arguments de la commande
 }Commande;
@@ -150,7 +151,7 @@ char* when(int start){
         exit(1);
     }
 
-    strftime(buffer, 80, "%e %B %H:%M:%S", timeInfo);
+    strftime(buffer, 80, "%e %B %C %H:%M:%S", timeInfo);
 
 
 
@@ -160,7 +161,7 @@ char* when(int start){
 char* concat_args(char* argv[], int argc, Commande* cmd) {
     // Création de la commande
     cmd->num = command_counter;
-    cmd->start = when( atoi(argv[1]));
+    cmd->start = getTime() + atoi(argv[1]);
     cmd->period = atoi(argv[2]);
 
     cmd->argc = argc - 3;
@@ -182,8 +183,8 @@ char* concat_args(char* argv[], int argc, Commande* cmd) {
         perror("Erreur lors de l'allocation de mémoire");
         exit(1);
     }
-    printf("Start : %s\n",cmd->start);
-    snprintf(str, max_len, "%d;%s;%d; ", cmd->num, cmd->start, cmd->period);
+    printf("Start : %d\n",cmd->start);
+    snprintf(str, max_len, "%d;%s;%d; ", cmd->num, when(cmd->start), cmd->period);
     for (int i = 0; i < cmd->argc; i++) {
         if (cmd->argv[i] != NULL && strlen(cmd->argv[i]) > 0) {
             size_t current_len = strlen(str);
@@ -210,14 +211,17 @@ time_t convertDateToSeconds(const char* date) {
     memset(&timeInfo, 0, sizeof(struct tm));
 
     // Configuration du format d'entrée
-    const char* format = "%d/%m/%Y %H:%M:%S"; // Format de date français (ex: 01/01/2023 12:34:56)
+    const char* format = "%e %B %C %T"; 
 
+    printf("Date : %s\n", date);
     // Analyse de la date donnée
-    if (strptime(date, format, &timeInfo) == NULL) {
+    if (strptime(date,format, &timeInfo) == NULL) {
         fprintf(stderr, "Erreur lors de l'analyse de la date\n");
         exit(1);
     }
 
+    printf("Jour : %d %d %d\n",timeInfo.tm_mday,timeInfo.tm_mon,timeInfo.tm_year);
+    printf("Time : %d:%d:%d\n",timeInfo.tm_hour,timeInfo.tm_min,timeInfo.tm_sec);
     // Conversion en nombre de secondes
     time_t seconds = mktime(&timeInfo);
     if (seconds == -1) {
@@ -234,7 +238,11 @@ time_t getNextTime(const Commande* cmd) {
     }
 
     // Convertir la date en secondes depuis Epoch
-    time_t dateInSeconds = convertDateToSeconds(cmd->start);
+    time_t dateInSeconds = cmd->start;
+    printf("Time Start : %ld\n", dateInSeconds);
+    printf("Time Now   : %ld\n", time(NULL));
+    pause();
+
     return dateInSeconds - time(NULL);
 }
 
@@ -336,7 +344,7 @@ int main() {
 
     while(1){
         if(liste->commande != NULL){
-            printf("Time alarm : %d \n", getnextTime(liste,liste->size));
+            printf("Time alarm : %ld \n", getNextTime(liste->commande[0]));
         }
 
         if(sigusr1_received){
