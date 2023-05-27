@@ -139,7 +139,7 @@ char **recv_argv(int fd) {
     }
     printf("len : %c", len);
 
-    char **argv = calloc(len + 1 , sizeof(char *)); // On alloue de la mémoire pour le tableau
+    char **argv = calloc(len + 1, sizeof(char *)); // On alloue de la mémoire pour le tableau
     if (argv == NULL) {
         perror("Error: calloc");
         exit(1);
@@ -148,7 +148,7 @@ char **recv_argv(int fd) {
     for (int i = 0; i < len; ++i) {
         argv[i] = NULL;
         int len2;
-        n = read(fd, &len2, sizeof(int)); // On lit la taille de la chaîne de caractères
+        n = read(fd, &len2 , sizeof(int)); // On lit la taille de la chaîne de caractères
         if (n < 0) {
             perror("Error: read");
             exit(1);

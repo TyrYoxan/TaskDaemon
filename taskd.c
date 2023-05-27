@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <sys/types.h>
+
 #include <dirent.h>
 #include <signal.h>
 #include <fcntl.h>
@@ -12,9 +12,10 @@
 #include "message.h"
 #include <time.h>
 #include <locale.h>
+#include <limits.h>
+#include <sys/wait.h>
 
-#define MAX_STRING_LENGTH 1024
-
+#define MAX_LENGTH 64
 /*************  Structures de donnée    *************/
 
 typedef struct {
@@ -58,32 +59,49 @@ void add_cmd(Liste *l, Commande cmd) {
         l->capacity = new_capacity;
     }
 
+    // Allouer de la mémoire pour la nouvelle commande
+    Commande *new_cmd = malloc(sizeof(Commande));
+    if (!new_cmd) {
+        perror("Erreur lors de l'allocation de mémoire");
+        exit(1);
+    }
 
-    l->commande[l->size] = &cmd;
+    // Copier les valeurs de la commande dans la nouvelle zone allouée
+    memcpy(new_cmd, &cmd, sizeof(Commande));
+
+    l->commande[l->size] = new_cmd;
     l->size++;
 
 }
 
 // Supprimer une commande
-void supp_cmd(Liste* l, int index){
-    if(index >= 0 && index < l->size){
-        for(int i=index; i < l->size-1; i++) {
-            l->commande[i] = l->commande[i+1];
+void supp_cmd(Liste* l, int index) {
+
+        Commande* cmd = l->commande[index];
+
+        // Libérer les chaînes de caractères individuelles dans argv
+        for (int i = 0; i < cmd->argc + 1; ++i) {
+            free(cmd->argv[i]);
         }
-        l->size--;
-        l->commande = realloc(l->commande, l->size*sizeof(Commande));
-    }else{
-        printf("Error: supp_cmd index invalide");
-    }
 
-}
+        // Libérer le tableau de commandes argv
+        free(cmd->argv);
 
-// Récupération d'une commande de la liste
-Commande* get_commande(Liste* l, int index) {
-    if(index >= 0 && index < l->size) {
-        return (l->commande[index]);
-    }
-    return NULL;
+
+        if (l->size != 1) {
+            // Libérer la structure Commande elle-même
+            free(cmd);
+            // Déplacer les commandes suivantes d'un indice vers la gauche
+            for (int i = index + 1; i < l->size; ++i) {
+                l->commande[i - 1] = l->commande[i];
+            }
+
+            // Mettre à jour la taille de la liste
+            l->size--;
+
+            // Réallouer l'espace mémoire pour le tableau de commandes
+            l->commande = realloc(l->commande, l->size * sizeof(Commande *));
+        }
 }
 
 // Supprimer liste
@@ -92,13 +110,37 @@ void supprimer_liste(Liste* l) {
         return; // Vérifier si la liste est nulle
     }
 
-    if (l->commande != NULL) {
-        // Libération de la mémoire occupée par chaque commande
-        for (int i = 0; i < l->size; i++) {
-            supp_cmd(l,i);
+    for (int i = 0; i < l->size; i++) {
+        Commande* cmd = l->commande[i];
+
+        // Libérer les chaînes de caractères individuelles dans argv
+        for (int i = 0; i < cmd->argc + 1; ++i) {
+            free(cmd->argv[i]);
         }
-        free(l->commande);
+
+        // Libérer le tableau de commandes argv
+        free(cmd->argv);
+
+
+        if (l->size != 1) {
+            // Libérer la structure Commande elle-même
+            free(cmd);
+            // Déplacer les commandes suivantes d'un indice vers la gauche
+            for (int j = i + 1; j < l->size; ++j) {
+                l->commande[j - 1] = l->commande[j];
+            }
+
+            // Mettre à jour la taille de la liste
+            l->size--;
+
+            // Réallouer l'espace mémoire pour le tableau de commandes
+            l->commande = realloc(l->commande, l->size * sizeof(Commande *));
+        }
     }
+
+    free(l->commande);
+    l->commande = NULL;
+    printf("Liste size : %d \n", l->size);
 
     free(l); // Libération de la mémoire occupée par la structure Liste
 }
@@ -121,21 +163,11 @@ void print_liste(Liste *l) {
 }
 
 /*************  Méthode    *************/
-
-time_t getTime(){
-    time_t currentTime = time(NULL);
-
-    if (currentTime == (time_t)-1) {
-        perror("Erreur lors de l'appel à time");
-        exit(1);
-    }
-
-    return currentTime;
-}
+Commande *exec_commande = NULL;
 
 char* when(int start){
-    time_t inputTime = getTime() + start;
-    printf("getTime : %ld\n",getTime());
+    time_t inputTime = start;
+
     struct tm *timeInfo;
     char *buffer = malloc(80 * sizeof(char));
 
@@ -155,30 +187,37 @@ char* when(int start){
 char* concat_args(char* argv[], int argc, Commande* cmd) {
     // Création de la commande
     cmd->num = command_counter;
-    cmd->start = getTime() + atoi(argv[1]);
-    cmd->period = atoi(argv[2]);
 
+    char start[MAX_LENGTH]; // Allouer de la mémoire pour start
+    strcpy(start, argv[1]);
+    cmd->start = time(NULL) + atoi(start);
+
+    char period[MAX_LENGTH]; // Allouer de la mémoire pour period
+    strcpy(period, argv[2]);
+    cmd->period = atoi(period);
     cmd->argc = argc - 3;
 
-    char** argvs = malloc((cmd->argc + 1) * sizeof(char*));
-    if (!argvs) {
+    cmd->argv = malloc((cmd->argc + 1) * sizeof(char*));
+    if (!cmd->argv) {
         perror("Erreur lors de l'allocation de mémoire");
         exit(1);
     }
-    for(int i = 0; i < cmd->argc; ++i){
-        argvs[i] = argv[i + 3];
+    for (int i = 0; i < cmd->argc; ++i) {
+        cmd->argv[i] = malloc(strlen(argv[i + 3]) + 1);
+        strcpy(cmd->argv[i], argv[i + 3]);
     }
-    argvs[cmd->argc] = NULL;
-    cmd->argv = argvs;
+    cmd->argv[cmd->argc] = NULL;
 
-    int max_len = 2048 + cmd->argc * 50; // Augmenter la taille maximale pour inclure suffisamment d'espace pour les arguments
+    int max_len = 1024 + cmd->argc * 50; // Augmenter la taille maximale pour inclure suffisamment d'espace pour les arguments
     char* str = malloc(max_len * sizeof(char));
     if (!str) {
         perror("Erreur lors de l'allocation de mémoire");
         exit(1);
     }
 
-    snprintf(str, max_len, "%d;%s;%d; ", cmd->num, when(atoi(argv[1])), cmd->period);
+    char *time = when(cmd->start);
+
+    snprintf(str, max_len, "%d;%s;%d; ", cmd->num, time, cmd->period);
     for (int i = 0; i < cmd->argc; i++) {
         if (cmd->argv[i] != NULL && strlen(cmd->argv[i]) > 0) {
             size_t current_len = strlen(str);
@@ -193,39 +232,37 @@ char* concat_args(char* argv[], int argc, Commande* cmd) {
         }
     }
 
+    free(time);
+
     // Ajouter le caractère de fin de chaîne
     str[max_len - 1] = '\0';
 
     ++command_counter;
 
-    //free(argvs);
+    for(int i = 0; i< argc; ++i){
+        free(argv[i]);
+    }
+    free(argv);
+
     return str;
 }
 
-time_t getNextTime(const Commande* cmd) {
-    if (cmd->start == NULL) {
-        return 0; // Pas de date spécifiée, exécuter immédiatement
-    }
+void getnextTime(Liste *l){
 
-    // Convertir la date en secondes depuis Epoch
-    time_t dateInSeconds = cmd->start;
-
-    return dateInSeconds - time(NULL);
-}
-
-int getnextTime(Liste *l, int nbCommande){
-    time_t minDuree = 3600;
+    time_t minDuree = INT_MAX;
     // Parcourir la liste des commandes
-    for (int i = 0; i < nbCommande; i++) {
-        time_t duree = getNextTime(l->commande[i]);
-        
-        if(minDuree > duree){
-            minDuree = duree;
+    for (int i = 0; i < l->size; i++) {
+        if (l->commande[i]) {
+            time_t duree = l->commande[i]->start - time(NULL);
+            if (minDuree > duree && duree >= 0) {
+                minDuree = duree;
+                exec_commande = l->commande[i];
+            }
         }
-        
     }
-   
-    return minDuree;
+
+    printf("Time : %ld\n", minDuree);
+    alarm(minDuree);
 }
 
 /*************  Handler    *************/
@@ -236,16 +273,30 @@ volatile int suppression_received = 0;
 
 void handler_sigusr1(int sig){
     printf("SIGUSR1 \n");
-    sigusr1_received =1;
+    sigusr1_received = 1;
 }
 
 void handler_alarm(int sig){
     printf("ALARM !!! \n");
-    alarm_received =1;
+    alarm_received = 1;
 }
 
 void handler_supression(int sig){
     suppression_received = 1;
+}
+
+void handler_sigchild(int sig){
+    pid_t pid;
+    int status;
+
+    // Récupérer et afficher le statut de tous les fils terminés
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        if (WIFEXITED(status)) {
+            printf("Le processus fils %d s'est terminé normalement avec le code de sortie %d\n", pid, WEXITSTATUS(status));
+        } else if (WIFSIGNALED(status)) {
+            printf("Le processus fils %d s'est terminé suite à un signal %d\n", pid, WTERMSIG(status));
+        }
+    }
 }
 
 /*************  Main    *************/
@@ -306,6 +357,7 @@ int main() {
     struct sigaction action;
     struct sigaction action2;
     struct sigaction action3;
+    struct sigaction action4;
 
     // Configurer le gestionnaire pour SIGUSR1
     action.sa_handler = handler_sigusr1;
@@ -327,6 +379,13 @@ int main() {
     sigaction(SIGINT, &action3, NULL);
     sigaction(SIGTERM, &action3, NULL);
 
+    // Configurer le gestionnaire pour SIGCHILD
+    action4.sa_handler = handler_sigchild;
+    sigemptyset(&action4.sa_mask);
+    action4.sa_flags = 0;
+    sigaction(SIGCHLD, &action4, NULL);
+
+
     int fd = open("/tmp/tasks.fifo", O_RDONLY);
     if (fd == -1) {
         perror("open");
@@ -336,14 +395,16 @@ int main() {
     Liste *liste;
     liste = initListe();
 
+    char **recv_strings;
+    char *result;
 
     while(1){
-        int stop = getnextTime(liste,liste->size);
-        //printf("Time : %d\n",getnextTime(liste,liste->size));
-        alarm(stop);
 
+        getnextTime(liste);
+
+        /* Signal SIGUSR1 reçu */
         if(sigusr1_received){
-            char **recv_strings;
+
 
             // Réception des chaînes de caractères
             recv_strings = recv_argv(fd);
@@ -357,32 +418,82 @@ int main() {
 
             Commande cmd = {0};
 
-            char *result = concat_args(recv_strings, size , &cmd);
+            result = concat_args(recv_strings, size , &cmd);
 
             add_cmd(liste,cmd);
+
             //print_liste(liste);
 
             f = fopen("/tmp/tasks.txt", "a");
+            struct flock lock;
+            memset(&lock, 0, sizeof(lock));
+            lock.l_type = F_RDLCK;
+            lock.l_whence = SEEK_SET;
+            lock.l_start = 0;
+            lock.l_len = 0;
+
+            fcntl((int) f, F_SETLKW, &lock);
             fprintf(f,"%s\n",result);
+
+            lock.l_type = F_UNLCK;
             fclose(f);
 
 
-            for (int i = 0; recv_strings[i] != NULL; i++) {
+            /*for (int i = 0; recv_strings[i] != NULL; i++) {
                 free(recv_strings[i]);
-            }
+            }*/
 
             free(result);
-            free(recv_strings);
+            //free(recv_strings);
 
             sigusr1_received = 0;
         }
 
+        /* Signal SIGALRM reçu */
         if(alarm_received){
+            printf("NUM commande : %d\n", exec_commande->num);
+            fprintf(stdout,"Start : %d\n",exec_commande->start);
+            exec_commande->start = exec_commande->start + exec_commande->period;
+            fprintf(stdout,"New start : %d\n",exec_commande->start);
+            pid_t pid = fork();
+
+            if(pid == 0){
+                char file_out[32];
+                sprintf(file_out,"/tmp/task/%d.out",exec_commande->num);
+                FILE *fileOut = freopen(file_out,"a",stdout);
+
+                char file_err[32];
+                sprintf(file_err,"/tmp/task/%d.err",exec_commande->num);
+                FILE *fileErr = freopen(file_err,"a",stderr);
+
+                // Redirection de la sortie standard vers le fichier .out
+                int fd_out = fileno(fileOut);
+                if (dup2(fd_out, 1) == -1) {
+                    perror("Erreur lors de la redirection de la sortie standard");
+                    exit(1);
+                }
+
+                // Redirection de la sortie d'erreur standard vers le fichier .err
+                int fd_err = fileno(fileErr);
+                if (dup2(fd_err, 2) == -1) {
+                    perror("Erreur lors de la redirection de la sortie d'erreur standard");
+                    exit(1);
+                }
+
+
+
+                execvp(exec_commande->argv[0],exec_commande->argv);
+                perror("execvp");
+                exit(1);
+            }
+            alarm_received =0;
 
         }
 
+        /* Signal d'interruption reçu */
         if(suppression_received){
             supprimer_liste(liste);
+            //free(result);
 
             close(fd);
             // Suppression du tube
@@ -400,7 +511,10 @@ int main() {
                 exit(1);
             }
 
+            free(exec_commande);
             return 1;
         }
+
+        sleep(1);
     }
 }
